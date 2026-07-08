@@ -57,7 +57,6 @@ namespace CollView {
 		for (int i = 0; i < numVerticesUsed; i++) {
 			auto src = &marioBuffers.position[i*3];
 			auto srcNormal = &marioBuffers.normal[i*3];
-			//auto srcTangent = &tangents[i*3];
 			auto srcUV = &marioBuffers.uv[i*2];
 			auto dest = &verticesOut[i];
 
@@ -75,13 +74,6 @@ namespace CollView {
 			dest->vTangents[0] = tmpNormal[0];
 			dest->vTangents[1] = tmpNormal[1];
 			dest->vTangents[2] = tmpNormal[2];
-
-			// todo?
-			//if (tangents) {
-			//	dest->vTangents[0] = srcTangent[0];
-			//	dest->vTangents[1] = srcTangent[1];
-			//	dest->vTangents[2] = srcTangent[2];
-			//}
 
 			auto tmp = NyaDrawing::CNyaRGBA32();
 			tmp.b = colR;

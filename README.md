@@ -15,7 +15,7 @@ An experiment for Need for Speed: Most Wanted that shows collision meshes
 
 Building is done on an Arch Linux system with CLion being used for the build process. 
 
-Before you begin, clone [nya-common](https://github.com/gaycoderprincess/nya-common), [nya-common-nfsmw](https://github.com/gaycoderprincess/nya-common-nfsmw), and [CwoeeMenuLib](https://github.com/gaycoderprincess/CwoeeMenuLib)to folders next to this one, so they can be found.
+Before you begin, clone [nya-common](https://github.com/gaycoderprincess/nya-common), [nya-common-nfsmw](https://github.com/gaycoderprincess/nya-common-nfsmw), and [CwoeeMenuLib](https://github.com/gaycoderprincess/CwoeeMenuLib) to folders next to this one, so they can be found.
 
 Required packages: `mingw-w64-gcc vcpkg`
 
