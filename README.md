@@ -2,6 +2,8 @@
 
 An experiment for Need for Speed: Most Wanted that shows collision meshes
 
+<img width="1920" height="1080" alt="collview" src="https://github.com/user-attachments/assets/349a5f94-38aa-44b0-a5f4-01f7efcaaff3" />
+
 ## Installation
 
 - Make sure you have v1.3 of the game, as this is the only version this plugin is compatible with. (exe size of 6029312 bytes)
