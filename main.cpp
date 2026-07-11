@@ -28,6 +28,7 @@ void HookLoop() {}
 
 #include "components/render3d.h"
 #include "components/colrender.h"
+#include "components/colexport.h"
 
 void Render3DLoop() {
 	UpdateD3DProperties();
@@ -73,6 +74,24 @@ void DebugMenu() {
 	QuickValueEditor("colR", CollView::colR);
 	QuickValueEditor("colG", CollView::colG);
 	QuickValueEditor("colB", CollView::colB);
+
+	QuickValueEditor("Exporter", CollView::bExportEnabled);
+	if (CollView::bExportEnabled) {
+		if (DrawMenuOption("Export to FBX")) {
+			CollExport::WriteToFBX();
+		}
+	}
+
+	/*if (DrawMenuOption("Preload Map")) {
+		for (int x = -5000; x < 5000; x += 50) {
+			for (int y = -5000; y < 5000; y += 50) {
+				UMath::Vector3 pos = {(float)x,0,(float)y};
+				Sim::SetStream(&pos, true);
+				CollView::DoCollisionCapture();
+				WriteLog(std::format("x {} y {}", x, y));
+			}
+		}
+	}*/
 
 	ChloeMenuLib::EndMenu();
 }

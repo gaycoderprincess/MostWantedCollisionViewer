@@ -109,6 +109,89 @@ namespace CollView {
 	std::vector<WCollisionTri> aCollisionTris;
 	std::vector<WCollisionTri> aCollisionBarriers;
 
+	struct CapturedArticle {
+		struct CapturedInstance {
+			int groupId;
+			std::vector<WCollisionTri> aTris;
+			std::vector<WCollisionTri> aBarriers;
+		};
+		std::vector<CapturedInstance> aInstances;
+	};
+	CapturedArticle aCapturedArticles[2700];
+
+	void CaptureCollisionArticle(WCollisionInstance* inst, int articleId) {
+		if (!inst) return;
+
+		auto article = inst->fCollisionArticle;
+		if (!article) return;
+
+		UMath::Matrix4 instMat;
+		inst->MakeMatrix(&instMat, true);
+
+		auto& capture = aCapturedArticles[articleId];
+		capture.aInstances.push_back({});
+
+		auto& out = capture.aInstances[capture.aInstances.size()-1];
+		out.groupId = inst->fGroupNumber;
+		if (!out.aTris.empty() || !out.aBarriers.empty()) return;
+
+		auto articles_end_ptr = (uintptr_t)(&article[1]);
+
+		auto stripSphere = (WCollisionStripSphere*)articles_end_ptr;
+		auto strip = (WCollisionStrip*)(&stripSphere[article->fNumStrips]);
+		for (int i = 0; i < article->fNumStrips; i++) {
+			int numToIterate = strip->numTrisOrSurfaceId - 2;
+			for (int j = 0; j < numToIterate; j++) {
+				WCollisionTri tri;
+				tri.fSurface.fSurface = 0;
+				tri.fSurface.fFlags = 0;
+				WCollisionStrip::MakeFace(strip, j, &stripSphere->fPos, &tri);
+				tri.fSurfaceRef = *(Attrib::Collection**)(articles_end_ptr + (4 * tri.fSurface.fSurface) + article->fStripsSize + article->fEdgesSize);
+
+				tri.fPt0 -= instMat.p;
+				tri.fPt1 -= instMat.p;
+				tri.fPt2 -= instMat.p;
+
+				out.aTris.push_back(tri);
+			}
+			strip += strip->numTrisOrSurfaceId;
+			stripSphere++;
+		}
+
+		auto list = (WCollisionBarrier*)(articles_end_ptr + article->fStripsSize);
+		for (int i = 0; i < article->fNumEdges; i++) {
+			auto ptMin = list[i].fPts[0];
+			auto ptMax = list[i].fPts[1];
+			ptMin -= instMat.p;
+			ptMax -= instMat.p;
+
+			// first tri
+			WCollisionTri tri;
+			tri.fPt2.x = ptMin.x;
+			tri.fPt2.y = ptMin.y;
+			tri.fPt2.z = ptMin.z;
+			tri.fPt1.x = ptMin.x;
+			tri.fPt1.y = ptMax.y;
+			tri.fPt1.z = ptMin.z;
+			tri.fPt0.x = ptMax.x;
+			tri.fPt0.y = ptMax.y;
+			tri.fPt0.z = ptMax.z;
+			out.aBarriers.push_back(tri);
+
+			// second tri
+			tri.fPt0.x = ptMin.x;
+			tri.fPt0.y = ptMin.y;
+			tri.fPt0.z = ptMin.z;
+			tri.fPt1.x = ptMax.x;
+			tri.fPt1.y = ptMin.y;
+			tri.fPt1.z = ptMax.z;
+			tri.fPt2.x = ptMax.x;
+			tri.fPt2.y = ptMax.y;
+			tri.fPt2.z = ptMax.z;
+			out.aBarriers.push_back(tri);
+		}
+	}
+
 	void ProcessCollisionBarriers(WCollisionBarrier* list, int count, NyaVec3 offset) {
 		for (int i = 0; i < count; i++) {
 			auto ptMin = list[i].fPts[0];
@@ -149,6 +232,9 @@ namespace CollView {
 		auto article = inst->fCollisionArticle;
 		if (!article) return;
 
+		// filter out unused stuff
+		if (inst->fGroupNumber && !SceneryGroupEnabledTable[inst->fGroupNumber]) return;
+
 		UMath::Matrix4 instMat;
 		inst->MakeMatrix(&instMat, true);
 
@@ -172,8 +258,6 @@ namespace CollView {
 			stripSphere++;
 		}
 
-		// filter out unused barriers
-		if (inst->fGroupNumber && !SceneryGroupEnabledTable[inst->fGroupNumber]) return;
 		ProcessCollisionBarriers((WCollisionBarrier*)(articles_end_ptr + article->fStripsSize), article->fNumEdges, instMat.p);
 	}
 
@@ -267,6 +351,21 @@ namespace CollView {
 	}
 
 	bool bEnabled = true;
+	bool bExportEnabled = false;
+
+	void DoCollisionCapture() {
+		for (int i = 0; i < 2700; i++) {
+			auto pack = WCollisionAssets::mCollisionPackList[i];
+			if (!pack) continue;
+
+			bool doExport = aCapturedArticles[i].aInstances.empty();
+			for (int j = 0; j < pack->mInstanceNum; j++) {
+				if (doExport) {
+					CaptureCollisionArticle(&pack->mInstanceList[j], i);
+				}
+			}
+		}
+	}
 
 	void OnTick() {
 		if (!bEnabled) return;
@@ -274,6 +373,10 @@ namespace CollView {
 		if (auto ply = GetLocalPlayerInterface<IRigidBody>()) {			
 			aCollisionTris.clear();
 			aCollisionBarriers.clear();
+
+			if (bExportEnabled) {
+				DoCollisionCapture();
+			}
 
 			for (int i = 0; i < 2700; i++) {
 				auto pack = WCollisionAssets::mCollisionPackList[i];
@@ -283,12 +386,6 @@ namespace CollView {
 					ProcessCollisionArticle(&pack->mInstanceList[j]);
 				}
 			}
-
-			//auto col = (WCollider*)ply->GetWCollider();
-			//for (int i = 0; i < col->fInstanceCacheList.size(); i++) {
-			//	auto inst = col->fInstanceCacheList[i];
-			//	ProcessCollisionArticle(inst);
-			//}
 
 			UpdateMarioCollision();
 		}
