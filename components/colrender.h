@@ -2,15 +2,16 @@ namespace CollView {
 	const int COLLVIEW_MAX_TRIANGLES = 16383;
 
 	bool bWireframeGround = false;
-	bool bWireframeBarriers = true;
+	bool bWireframeBarriers = false;
 
 	int colR = 0;
-	int colG = 255;
+	int colG = 0;
 	int colB = 255;
 
 	struct CollisionGeometryBuffer {
 		float *position;
 		float *normal;
+		float *color;
 		float *uv;
 		uint16_t numTrianglesUsed;
 	};
@@ -52,11 +53,18 @@ namespace CollView {
 			return;
 		}
 
+		DWORD fillMode;
+		g_pd3dDevice->GetRenderState(D3DRS_FILLMODE, &fillMode);
+
+		auto sunDir = NyaVec3(0.75, 0.0, 0.75);
+		sunDir.Normalize();
+
 		int numFacesUsed = marioBuffers.numTrianglesUsed;
 		int numVerticesUsed = marioBuffers.numTrianglesUsed*3;
 		for (int i = 0; i < numVerticesUsed; i++) {
 			auto src = &marioBuffers.position[i*3];
 			auto srcNormal = &marioBuffers.normal[i*3];
+			auto srcColor = &marioBuffers.color[i*3];
 			auto srcUV = &marioBuffers.uv[i*2];
 			auto dest = &verticesOut[i];
 
@@ -75,12 +83,24 @@ namespace CollView {
 			dest->vTangents[1] = tmpNormal[1];
 			dest->vTangents[2] = tmpNormal[2];
 
-			auto tmp = NyaDrawing::CNyaRGBA32();
-			tmp.b = colR;
-			tmp.g = colG;
-			tmp.r = colB;
-			tmp.a = 255;
-			dest->Color = *(uint32_t*)&tmp;
+			if (fillMode == D3DFILL_SOLID && std::abs(tmpNormal.y) < 0.001) {
+				float shading = std::clamp(tmpNormal.Dot(sunDir), 0.66, 1.0);
+
+				auto tmp = NyaDrawing::CNyaRGBA32();
+				tmp.b = srcColor[0] * 255 * shading;
+				tmp.g = srcColor[1] * 255 * shading;
+				tmp.r = srcColor[2] * 255 * shading;
+				tmp.a = 255;
+				dest->Color = *(uint32_t*)&tmp;
+			}
+			else {
+				auto tmp = NyaDrawing::CNyaRGBA32();
+				tmp.b = srcColor[0] * 255;
+				tmp.g = srcColor[1] * 255;
+				tmp.r = srcColor[2] * 255;
+				tmp.a = 255;
+				dest->Color = *(uint32_t*)&tmp;
+			}
 
 			dest->vUV[0] = srcUV[0];
 			dest->vUV[1] = srcUV[1];
@@ -103,7 +123,7 @@ namespace CollView {
 
 		static auto tex = LoadTexture("collView.png");
 		tmpModel.pTexture = tex;
-		tmpModel.RenderAt(WorldToRenderMatrix(mat), false);
+		tmpModel.RenderAt(WorldToRenderMatrix(mat));
 	}
 
 	std::vector<WCollisionTri> aCollisionTris;
@@ -247,6 +267,7 @@ namespace CollView {
 			for (int j = 0; j < numToIterate; j++) {
 				WCollisionTri tri;
 				WCollisionStrip::MakeFace(strip, j, &stripSphere->fPos, &tri);
+				tri.fSurfaceRef = *(Attrib::Collection**)(articles_end_ptr + (4 * tri.fSurface.fSurface) + article->fStripsSize + article->fEdgesSize);
 
 				tri.fPt0 -= instMat.p;
 				tri.fPt1 -= instMat.p;
@@ -268,6 +289,7 @@ namespace CollView {
 		if (!colBuffers.position) {
 			colBuffers.position = new float[9 * COLLVIEW_MAX_TRIANGLES];
 			colBuffers.normal = colBuffersFlip.normal = new float[9 * COLLVIEW_MAX_TRIANGLES];
+			colBuffers.color = colBuffersFlip.color = new float[9 * COLLVIEW_MAX_TRIANGLES];
 			colBuffers.uv = colBuffersFlip.uv = new float[6 * COLLVIEW_MAX_TRIANGLES];
 			colBuffersFlip.position = new float[9 * COLLVIEW_MAX_TRIANGLES];
 		}
@@ -275,6 +297,7 @@ namespace CollView {
 
 		auto colDrawPosition = &colBuffers.position[0];
 		auto colDrawNormal = &colBuffers.normal[0];
+		auto colDrawColor = &colBuffers.color[0];
 		auto colDrawUV = &colBuffers.uv[0];
 
 		auto colDrawFlipPosition = &colBuffersFlip.position[0];
@@ -309,18 +332,53 @@ namespace CollView {
 				colDrawFlipPosition[8] = pt0[2];
 				colDrawFlipPosition += 9;
 
-				colDrawNormal[0] = 0;
-				colDrawNormal[1] = 1;
-				colDrawNormal[2] = 0;
+				// normal
+				auto faceNormal = (pt1 - pt0).Cross(pt2 - pt0);
+				faceNormal.Normalize();
+
+				colDrawNormal[0] = faceNormal[0];
+				colDrawNormal[1] = faceNormal[1];
+				colDrawNormal[2] = faceNormal[2];
 				colDrawNormal += 3;
-				colDrawNormal[0] = 0;
-				colDrawNormal[1] = 1;
-				colDrawNormal[2] = 0;
+				colDrawNormal[0] = faceNormal[0];
+				colDrawNormal[1] = faceNormal[1];
+				colDrawNormal[2] = faceNormal[2];
 				colDrawNormal += 3;
-				colDrawNormal[0] = 0;
-				colDrawNormal[1] = 1;
-				colDrawNormal[2] = 0;
+				colDrawNormal[0] = faceNormal[0];
+				colDrawNormal[1] = faceNormal[1];
+				colDrawNormal[2] = faceNormal[2];
 				colDrawNormal += 3;
+
+				if (in->fSurfaceRef) {
+					auto color = (float*)in->fSurfaceRef->GetData(0x740D3125, 0);
+
+					colDrawColor[0] = color[0];
+					colDrawColor[1] = color[1];
+					colDrawColor[2] = color[2];
+					colDrawColor += 3;
+					colDrawColor[0] = color[0];
+					colDrawColor[1] = color[1];
+					colDrawColor[2] = color[2];
+					colDrawColor += 3;
+					colDrawColor[0] = color[0];
+					colDrawColor[1] = color[1];
+					colDrawColor[2] = color[2];
+					colDrawColor += 3;
+				}
+				else {
+					colDrawColor[0] = colR / 255.0;
+					colDrawColor[1] = colG / 255.0;
+					colDrawColor[2] = colB / 255.0;
+					colDrawColor += 3;
+					colDrawColor[0] = colR / 255.0;
+					colDrawColor[1] = colG / 255.0;
+					colDrawColor[2] = colB / 255.0;
+					colDrawColor += 3;
+					colDrawColor[0] = colR / 255.0;
+					colDrawColor[1] = colG / 255.0;
+					colDrawColor[2] = colB / 255.0;
+					colDrawColor += 3;
+				}
 
 				colDrawUV[0] = 0;
 				colDrawUV[1] = 0;
